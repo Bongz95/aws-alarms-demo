@@ -1,0 +1,64 @@
+service: aws-alarms-demo
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: dev
+  region: us-west-1
+  lambdaHashingVersion: 20201221
+
+plugins:
+  - serverless-plugin-aws-alerts
+  
+custom:
+  alerts:
+    stages:
+      - prod
+      - dev
+    topics:
+      alarm:
+        topic: ${self:service}-${opt:stage, "dev"}-alerts-alarm
+        notifications:
+          - protocol: email
+            endpoint: emmanuel.dlaming09@gmail.com # Change this to your email address
+    
+    nameTemplate: $[functionName]-$[metricName]-Alarm # Optionally - naming template for alarms, can be overwritten in definitions
+    prefixTemplate: $[stackName] # Optionally - override the alarm name prefix
+    
+    definitions:
+      customAlarm:
+        actionsEnabled: false # Indicates whether actions should be executed during any changes to the alarm state. The default is TRUE
+        description: 'Function duration alarm'
+        namespace: 'AWS/Lambda'
+        metric: duration
+        threshold: 2
+        statistic: Average
+        period: 60
+        evaluationPeriods: 1
+        datapointsToAlarm: 1
+        comparisonOperator: GreaterThanOrEqualToThreshold
+      
+    alarms:
+      - functionErrors
+      - functionThrottles
+
+functions:
+  sayHello:
+    handler: ./index.sayHello
+    events:
+      - http:
+          path: hello
+          method: get
+    
+    alarms: # merged with function alarms
+      - customAlarm
+      - name: fooAlarm # creates new alarm or overwrites some properties of the alarm (with the same name) from definitions
+        namespace: 'AWS/Lambda'
+        actionsEnabled: false
+        metric: errors # define custom metrics here
+        threshold: 1
+        statistic: Minimum
+        period: 60
+        evaluationPeriods: 1
+        datapointsToAlarm: 1
+        comparisonOperator: GreaterThanOrEqualToThreshold
